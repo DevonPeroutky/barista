@@ -1,0 +1,63 @@
+wandb_version: 1
+
+learning_rate:
+  desc: null
+  value: 0.02
+architecture:
+  desc: null
+  value: Blip2ForConditionalGeneration
+dataset:
+  desc: null
+  value: CIFAR-100
+num_train_epoch:
+  desc: null
+  value: 2
+warmup_steps:
+  desc: null
+  value: 500
+weight_decay:
+  desc: null
+  value: 0.01
+per_device_train_batch_size:
+  desc: null
+  value: 4
+per_device_eval_batch_size:
+  desc: null
+  value: 8
+_wandb:
+  desc: null
+  value:
+    python_version: 3.10.13
+    cli_version: 0.16.2
+    framework: huggingface
+    huggingface_version: 4.37.1
+    is_jupyter_run: true
+    is_kaggle_kernel: false
+    start_time: 1706400764.883265
+    t:
+      1:
+      - 1
+      - 11
+      - 49
+      - 51
+      - 55
+      - 71
+      - 100
+      2:
+      - 1
+      - 11
+      - 49
+      - 51
+      - 55
+      - 71
+      - 100
+      3:
+      - 16
+      - 23
+      4: 3.10.13
+      5: 0.16.2
+      6: 4.37.1
+      8:
+      - 1
+      - 5
+      13: linux-x86_64

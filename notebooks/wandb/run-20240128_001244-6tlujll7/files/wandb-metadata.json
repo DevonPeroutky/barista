@@ -1,0 +1,67 @@
+{
+    "os": "Linux-5.10.0-27-cloud-amd64-x86_64-with-glibc2.31",
+    "python": "3.10.13",
+    "heartbeatAt": "2024-01-28T00:12:45.708774",
+    "startedAt": "2024-01-28T00:12:44.873869",
+    "docker": null,
+    "cuda": null,
+    "args": [],
+    "state": "running",
+    "program": "notebooks/llava.ipynb",
+    "codePathLocal": null,
+    "root": "/home/devonperoutky/coffeebot",
+    "git": {
+        "remote": "https://github.com/DevonPeroutky/coffeebot.git",
+        "commit": "533fd3c81539fcd54ad17d542a37461ee592422f"
+    },
+    "email": null,
+    "host": "deep-learning-notebook-do-not-delete",
+    "username": "devonperoutky",
+    "executable": "/home/devonperoutky/.cache/pypoetry/virtualenvs/coffeebot-p3lKt8zM-py3.10/bin/python",
+    "cpu_count": 2,
+    "cpu_count_logical": 4,
+    "cpu_freq": {
+        "current": 2200.222,
+        "min": 0.0,
+        "max": 0.0
+    },
+    "cpu_freq_per_core": [
+        {
+            "current": 2200.222,
+            "min": 0.0,
+            "max": 0.0
+        },
+        {
+            "current": 2200.222,
+            "min": 0.0,
+            "max": 0.0
+        },
+        {
+            "current": 2200.222,
+            "min": 0.0,
+            "max": 0.0
+        },
+        {
+            "current": 2200.222,
+            "min": 0.0,
+            "max": 0.0
+        }
+    ],
+    "disk": {
+        "/": {
+            "total": 98.18611526489258,
+            "used": 71.8470458984375
+        }
+    },
+    "gpu": "NVIDIA L4",
+    "gpu_count": 1,
+    "gpu_devices": [
+        {
+            "name": "NVIDIA L4",
+            "memory_total": 24152899584
+        }
+    ],
+    "memory": {
+        "total": 15.633045196533203
+    }
+}
