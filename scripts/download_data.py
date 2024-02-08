@@ -30,21 +30,23 @@ For list of subreddits, grab the top X posts for the year/month/alltime
 class RedditPostCaption:
     submission_id: str
     comment_id: str
+    title: str
     comment: str
     image_width: int
     image_height: int
     image_download_path: str
     image_url: str
 
-    def to_json(self):
+    def to_json(self, prompt_type="basic"):
         return {
             "id": self.submission_id,
+            "title": self.title,
             "image": self.image_download_path,
             "comment_id": self.comment_id,
             "conversations": [
                 {
                     "from": "human",
-                    "value": "<image>\nWrite an insult about this person."
+                    "value": "<image>\nWrite an insult about this person." if prompt_type == "basic" else f'<image>\n{self.title}{"" if self.title.endswith(".") or self.title.endswith("!") or self.title.endswith("?") else "."} Write an insult about this person.'
                 },
                 {
                     "from": "gpt",
@@ -80,7 +82,7 @@ class SubRedditCrawler:
 
     def ingest_subreddit_as_csv(self, subreddit_name, num_submissions=None, comments_per_submission=10):
         out_path = './datasets/raw/'
-        image_captions = self._ingest_subreddit(subreddit_name, out_path, num_submissions, comments_per_submission)
+        image_captions = self._ingest_subreddit(subreddit_name, num_submissions, comments_per_submission)
         print(f'Ingested {len(image_captions)} image-caption pairs from subreddit {subreddit_name}')
 
         out_file = open(f'{out_path}/full_ds.csv', 'a')
@@ -90,11 +92,10 @@ class SubRedditCrawler:
 
         out_file.close()
 
-    def _ingest_subreddit(self, subreddit_name, output_path, num_submissions=None, comments_per_submission=10) -> List[RedditPostCaption]:
+    def _ingest_subreddit(self, subreddit_name, num_submissions=None, comments_per_submission=10) -> List[RedditPostCaption]:
 
         # Set up the image directory
         image_dir = './images'
-        file_path = f'{output_path}/train_reddit_roastme.json'
         if not os.path.exists(image_dir):
             os.makedirs(image_dir)
 
@@ -172,48 +173,63 @@ class SubRedditCrawler:
             # Output the top level comments
             for top_level_comment in sorted(top_level_comments, key=lambda c: c.score, reverse=True):
                 for image in images:
-                    image_captions.append(RedditPostCaption(submission.id, top_level_comment.id, top_level_comment.body,
-                                                            image.get("width"), image.get("height"),
-                                                            image.get("image_path"), submission.url))
+                    image_captions.append(
+                        RedditPostCaption(
+                            submission_id=submission.id,
+                            comment_id=top_level_comment.id,
+                            title=submission.title,
+                            comment=top_level_comment.body,
+                            image_width=image.get("width"),
+                            image_height=image.get("height"),
+                            image_download_path=image.get("image_path"),
+                            image_url=submission.url
+                        )
+                    )
 
         return image_captions
 
     def ingest_subreddit_as_conversation_json(self, subreddit_name, output_path, num_submissions=None, comments_per_submission=10):
-        image_captions = [reddit_submission.to_json() for reddit_submission in self._ingest_subreddit(subreddit_name, output_path, num_submissions, comments_per_submission)]
-        print(f'Ingested {len(image_captions)} image-caption pairs from subreddit {subreddit_name}')
+        reddit_post_captions = self._ingest_subreddit(subreddit_name, num_submissions, comments_per_submission)
+        print(f'Ingested {len(reddit_post_captions)} image-caption pairs from subreddit {subreddit_name}')
 
         # Split image_captions into train, test, and validation sets
         train_percentage, test_percentage, validation_percentage = .8, .1, .1
         assert train_percentage + test_percentage + validation_percentage == 1
 
-        train_size = int(train_percentage * len(image_captions))
-        test_size = int(test_percentage * len(image_captions))
+        train_size = int(train_percentage * len(reddit_post_captions))
+        test_size = int(test_percentage * len(reddit_post_captions))
 
-        train_split = image_captions[0:train_size]
-        test_split = image_captions[train_size:train_size + test_size]
-        validation_split = image_captions[train_size+test_size:]
+        train_split = reddit_post_captions[0:train_size]
+        test_split = reddit_post_captions[train_size:train_size + test_size]
+        validation_split = reddit_post_captions[train_size+test_size:]
 
-        # Save the full JSON data list to a file
-        json_output_path = os.path.join(output_path, 'full_dataset.json')
-        os.makedirs(os.path.dirname(json_output_path), exist_ok=True)
-        with open(json_output_path, 'w') as json_file:
-            json.dump(image_captions, json_file, indent=4)
-            print(f'Saved {len(image_captions)} image-caption pairs to {json_output_path}')
+        # Ensure the output directories exists
+        augmented_output_path = os.path.join(output_path, 'augmented', 'full_dataset.json')
+        basic_output_path = os.path.join(output_path, 'basic', 'full_dataset.json')
+        os.makedirs(os.path.dirname(augmented_output_path), exist_ok=True)
+        os.makedirs(os.path.dirname(basic_output_path), exist_ok=True)
 
-        json_output_path = os.path.join(output_path, 'train_dataset.json')
-        with open(json_output_path, 'w') as json_file:
-            json.dump(train_split, json_file, indent=4)
-            print(f'Saved {len(train_split)} image-caption pairs to {json_output_path}')
+        for prompt_type in ["basic", "augmented"]:
+            json_output_path = os.path.join(output_path, prompt_type, 'full_dataset.json')
+            with open(json_output_path, 'w') as json_file:
+                json.dump([p.to_json(prompt_type) for p in reddit_post_captions], json_file, indent=4)
+                print(f'Saved {len(reddit_post_captions)} image-caption pairs to {json_output_path}')
 
-        json_output_path = os.path.join(output_path, 'test_dataset.json')
-        with open(json_output_path, 'w') as json_file:
-            json.dump(test_split, json_file, indent=4)
-            print(f'Saved {len(test_split)} image-caption pairs to {json_output_path}')
+            json_output_path = os.path.join(output_path, prompt_type, 'train_dataset.json')
+            with open(json_output_path, 'w') as json_file:
+                json.dump([p.to_json(prompt_type) for p in train_split], json_file, indent=4)
+                print(f'Saved {len(train_split)} image-caption pairs to {json_output_path}')
 
-        json_output_path = os.path.join(output_path, 'validation_dataset.json')
-        with open(json_output_path, 'w') as json_file:
-            json.dump(validation_split, json_file, indent=4)
-            print(f'Saved {len(validation_split)} image-caption pairs to {json_output_path}')
+            json_output_path = os.path.join(output_path, prompt_type, 'test_dataset.json')
+            with open(json_output_path, 'w') as json_file:
+                json.dump([p.to_json(prompt_type) for p in test_split], json_file, indent=4)
+                print(f'Saved {len(test_split)} image-caption pairs to {json_output_path}')
+
+            json_output_path = os.path.join(output_path, prompt_type, 'validation_dataset.json')
+            with open(json_output_path, 'w') as json_file:
+                json.dump([p.to_json(prompt_type) for p in validation_split], json_file, indent=4)
+                print(f'Saved {len(validation_split)} image-caption pairs to {json_output_path}')
+
 
     @staticmethod
     def download_image( image_url, download_path):
