@@ -162,3 +162,8 @@ cython_debug/
 # Custom
 datasets
 images
+nohup.out
+
+# Weights & Bias
+notebooks/wandb/
+checkpoints/
