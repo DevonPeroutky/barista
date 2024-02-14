@@ -13,7 +13,7 @@ from src.inference.utils import get_model_name_from_path
 from typing import List, Optional, Tuple, Union
 
 from transformers import AutoTokenizer, AutoConfig, AutoModelForCausalLM, \
-                         LlamaConfig, LlamaModel, LlamaForCausalLM
+    LlamaConfig, LlamaModel, LlamaForCausalLM, LlavaConfig
 
 from transformers.modeling_outputs import CausalLMOutputWithPast
 
@@ -32,6 +32,11 @@ class InferenceService:
         self.tokenizer, self.model, self.image_processor, self.context_len = self.load_pretrained_model(
             model_path
         )
+
+        print(self.tokenizer)
+        print(self.model)
+        print(self.image_processor)
+        print(self.context_len)
 
     def load_pretrained_model(self, model_path: str, **kwargs):
         model_name = get_model_name_from_path(model_path=model_path)
@@ -328,9 +333,6 @@ class LlavaMetaForCausalLM(ABC):
                 for p in self.get_output_embeddings().parameters():
                     p.requires_grad = False
 
-class LlavaConfig(LlamaConfig):
-    model_type = "llava"
-
 
 class LlavaLlamaModel(LlavaMetaModel, LlamaModel):
     config_class = LlavaConfig
@@ -409,6 +411,5 @@ class LlavaLlamaForCausalLM(LlamaForCausalLM, LlavaMetaForCausalLM):
             _inputs['images'] = images
         return _inputs
 
-AutoConfig.register("llava", LlavaConfig)
 AutoModelForCausalLM.register(LlavaConfig, LlavaLlamaForCausalLM)
 

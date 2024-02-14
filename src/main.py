@@ -8,13 +8,13 @@ from src.inference.constants import AUGMENTED_MODEL_PATH
 from src.inference.service import InferenceService
 from src.inference.utils import get_model_name_from_path
 
+app = FastAPI()
+
 origins = [
     "http://localhost:3000",
     "http://127.0.0.1:5173",
     "http://localhost:5173"
 ]
-
-app = FastAPI()
 
 app.add_middleware(
     CORSMiddleware,
