@@ -4,15 +4,17 @@ from PIL import Image
 from fastapi import FastAPI, File, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 
+from src.inference.constants import AUGMENTED_MODEL_PATH
 from src.inference.service import InferenceService
+from src.inference.utils import get_model_name_from_path
+
+app = FastAPI()
 
 origins = [
     "http://localhost:3000",
     "http://127.0.0.1:5173",
     "http://localhost:5173"
 ]
-
-app = FastAPI()
 
 app.add_middleware(
     CORSMiddleware,
@@ -40,6 +42,6 @@ async def create_upload_file(file: UploadFile = File(...)):
     # Print out the image size
     print(pil_image.size)
 
-    response = InferenceService().generate_caption(pil_image)
+    response = InferenceService(model_path=AUGMENTED_MODEL_PATH).generate_caption(pil_image)
 
     return {"roast_response": response}
