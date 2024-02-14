@@ -265,10 +265,7 @@ class SubRedditCrawler:
             print(f'Loaded {len(existing_data)} existing image-caption pairs from {dataset_path}')
 
         # Add the new data to the existing data
-        print(existing_data)
-        print(dataset)
         full_ds = existing_data + [p.to_json() for p in dataset]
-        print(full_ds)
 
         # Save the new data to the dataset
         with open(dataset_path, 'w') as json_file:
