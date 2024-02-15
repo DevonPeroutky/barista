@@ -98,7 +98,10 @@ class SubRedditCrawler:
         existing_images = os.listdir(image_dir)
         print(f'Loaded {len(existing_images)} existing downloaded images from {image_dir}')
 
-        for submission in self.reddit_client.subreddit(subreddit_name).top(limit=num_submissions):
+        submissions = self.reddit_client.subreddit(subreddit_name).top(limit=num_submissions)
+        print(f'Received {num_submissions} submissions from subreddit {subreddit_name}')
+
+        for submission in submissions:
             print('--------------------------------------------------')
             print(f'Title: {submission.title} (https://reddit.com{submission.permalink})')
             print(f'Self Text: {submission.selftext}')
@@ -216,7 +219,7 @@ class SubRedditCrawler:
         return image_captions
 
     def ingest_subreddit_as_conversation_json(self, subreddit_name, output_path, num_submissions=None, comments_per_submission=10):
-        dataset_types =  ["basic", "augmented"]
+        dataset_types = ["basic", "augmented"]
 
         # Ensure the output directories exists
         if not os.path.exists(output_path):
