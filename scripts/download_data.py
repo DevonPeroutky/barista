@@ -70,6 +70,7 @@ class SubRedditCrawler:
         user_agent="my user agent",
     )
 
+
     def _print_comment_tree(self, comment, indent=0):
         self.seen_ids.add(comment.id)
         if isinstance(comment, praw.models.MoreComments):
@@ -81,18 +82,6 @@ class SubRedditCrawler:
         for reply in comment.replies.list():
             if reply.id not in self.seen_ids:
                 self._print_comment_tree(reply, indent + 1)
-
-    def ingest_subreddit_as_csv(self, subreddit_name, num_submissions=None, comments_per_submission=10):
-        out_path = './datasets/raw/'
-        image_captions = self._ingest_subreddit(subreddit_name, num_submissions, comments_per_submission)
-        print(f'Ingested {len(image_captions)} image-caption pairs from subreddit {subreddit_name}')
-
-        out_file = open(f'{out_path}/full_ds.csv', 'a')
-        for image_caption in image_captions:
-            print(image_caption.to_csv())
-            out_file.write(image_caption.to_csv() + '\n')
-
-        out_file.close()
 
     def _ingest_subreddit(self, subreddit_name, output_path, num_submissions=None, comments_per_submission=10) -> List[RedditPostCaption]:
         image_dir = output_path + '/images'
@@ -122,41 +111,54 @@ class SubRedditCrawler:
             # TODO: if submission.id alread in JSON, skip it.
             image_exists = lambda image_path: Path(image_path).exists()
             existing_submission = any([sub.get('id') == submission.id for sub in existing_data])
-            images = [f'{image_dir}/{submission.id}_{key}.jpg' for key in submission.media_metadata.keys()] if hasattr(submission, 'media_metadata') else [f'{image_dir}/{submission.id}.jpg']
-            print(f'Expected Images:  {images}')
-            all_images_downloaded = all([image_exists(image_path) for image_path in images])
+            image_paths = [f'{image_dir}/{submission.id}_{key}.jpg' for key in submission.media_metadata.keys()] if hasattr(submission, 'media_metadata') else [f'{image_dir}/{submission.id}.jpg']
+            print(f'Expected Images:  {image_paths}')
+            all_images_downloaded = all([image_exists(image_path) for image_path in image_paths])
 
             if existing_submission and all_images_downloaded:
                 print(f"Skipping submission {submission.id} as it already exists in the dataset!!!!!!!!!!")
                 continue
 
-            # Check if submission has media_metadata attribute
             images = []
 
-            if hasattr(submission, 'media_metadata'):
-                print("!!!!!!!!!Submission has media metadata, downloading the full gallery of images")
+            # if image already downloaded, skip it
+            if all([image_exists(image_path) for image_path in image_paths]):
+                print(f"All {len(image_paths)} images for {submission.id} already downloaded. Skipping...")
 
-                # For each key-value pair in the media_metadata dictionary
-                for key, value in submission.media_metadata.items():
-                    # Get the url of the image
-                    image_url = value.get('s').get('u')
-                    image, width, height, download_path = SubRedditCrawler.download_image(image_url,
-                                                                                          f'{image_dir}/{submission.id}_{key}.jpg')
+                # Read in all the images as PIL images
+                for image_path in image_paths:
+                    image = Image.open(image_path)
+                    images.append({
+                        'width': image.width,
+                        'height': image.height,
+                        'image_path': image_path,
+                    })
+            else:
+
+                if hasattr(submission, 'media_metadata'):
+                    print("!!!!!!!!!Submission has media metadata, downloading the full gallery of images")
+
+                    # For each key-value pair in the media_metadata dictionary
+                    for key, value in submission.media_metadata.items():
+                        # Get the url of the image
+                        image_url = value.get('s').get('u')
+                        image, width, height, download_path = SubRedditCrawler.download_image(image_url,
+                                                                                              f'{image_dir}/{submission.id}_{key}.jpg')
+                        if image:
+                            images.append({
+                                'width': width,
+                                'height': height,
+                                'image_path': download_path,
+                            })
+                else:
+                    image, width, height, download_path = SubRedditCrawler.download_image(submission.url,
+                                                                                          f'{image_dir}/{submission.id}.jpg')
                     if image:
                         images.append({
                             'width': width,
                             'height': height,
                             'image_path': download_path,
                         })
-            else:
-                image, width, height, download_path = SubRedditCrawler.download_image(submission.url,
-                                                                                      f'{image_dir}/{submission.id}.jpg')
-                if image:
-                    images.append({
-                        'width': width,
-                        'height': height,
-                        'image_path': download_path,
-                    })
 
             if not images:
                 print("No images found, skipping submission!!!!")
@@ -266,13 +268,12 @@ class SubRedditCrawler:
 
         # Add the new data to the existing data
         print(f'Adding {len(dataset)} new image-caption pairs to the existing {len(existing_data)} pairs')
-        full_ds = existing_data + [p.to_json() for p in dataset]
+        full_ds = existing_data + [p.to_json(prompt_type=prompt_type) for p in dataset]
 
         # Save the new data to the dataset
         with open(dataset_path, 'w') as json_file:
             json.dump(full_ds, json_file, indent=4)
             print(f'Saved {len(full_ds)} image-caption pairs to {dataset_path}')
-
 
     @staticmethod
     def download_image( image_url, download_path):
@@ -289,5 +290,7 @@ class SubRedditCrawler:
             width, height = im.size
             return im, width, height, download_path
         except PIL.UnidentifiedImageError as e:
+            # delete the file
+            os.remove(download_path)
             print("Error opening image, skipping submission")
             return None, None, None, None
