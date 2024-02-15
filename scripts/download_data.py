@@ -70,7 +70,6 @@ class SubRedditCrawler:
         user_agent="my user agent",
     )
 
-
     def _print_comment_tree(self, comment, indent=0):
         self.seen_ids.add(comment.id)
         if isinstance(comment, praw.models.MoreComments):
@@ -127,12 +126,16 @@ class SubRedditCrawler:
 
                 # Read in all the images as PIL images
                 for image_path in image_paths:
-                    image = Image.open(image_path)
-                    images.append({
-                        'width': image.width,
-                        'height': image.height,
-                        'image_path': image_path,
-                    })
+                    try:
+                        image = Image.open(image_path)
+                        images.append({
+                            'width': image.width,
+                            'height': image.height,
+                            'image_path': image_path,
+                        })
+                    except PIL.UnidentifiedImageError as e:
+                        print(f"Error opening image {image_path}, skipping submission")
+                        continue
             else:
 
                 if hasattr(submission, 'media_metadata'):
