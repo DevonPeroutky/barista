@@ -41,7 +41,8 @@ class RedditPostCaption:
 
     def to_json(self, prompt_type="basic"):
         return {
-            "id": self.submission_id,
+            "id": f"{self.submission_id}_{self.comment_id}",
+            "submission_id": self.submission_id,
             "title": self.title,
             "image": self.image_download_path,
             "comment_id": self.comment_id,
@@ -98,8 +99,9 @@ class SubRedditCrawler:
         existing_images = os.listdir(image_dir)
         print(f'Loaded {len(existing_images)} existing downloaded images from {image_dir}')
 
-        submissions = self.reddit_client.subreddit(subreddit_name).top(limit=num_submissions)
-        print(f'Received {num_submissions} submissions from subreddit {subreddit_name}')
+        submission_generator = self.reddit_client.subreddit(subreddit_name).top(limit=num_submissions)
+        submissions = [sub for sub in submission_generator]
+        print(f'Received {len(submissions)} submissions from subreddit {subreddit_name}')
 
         for submission in submissions:
             print('--------------------------------------------------')
