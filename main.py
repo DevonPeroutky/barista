@@ -5,4 +5,4 @@ if __name__ == '__main__':
 
     # Ingest image-caption pairs from subreddit
     # SubRedditCrawler().ingest_subreddit_as_csv('RoastMe', num_submissions=None)
-    SubRedditCrawler().ingest_subreddit_as_conversation_json('RoastMe', output_path="/home/devonperoutky/LLaVA/dataset", num_submissions=5000)
+    SubRedditCrawler().ingest_subreddit_as_conversation_json('RoastMe', output_path="/home/devonperoutky/temp/", num_submissions=10)

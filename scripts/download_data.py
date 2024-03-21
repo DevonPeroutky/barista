@@ -265,6 +265,7 @@ class SubRedditCrawler:
             full_dataset_path = os.path.join(output_path, prompt_type, 'full_dataset.json')
 
             # Load the existing data
+            existing_data = []
             if os.path.exists(full_dataset_path):
                 with open(full_dataset_path, 'r') as json_file:
                     existing_data = json.load(json_file)
