@@ -167,3 +167,5 @@ nohup.out
 # Weights & Bias
 notebooks/wandb/
 checkpoints/
+
+.uuid

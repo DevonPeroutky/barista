@@ -40,5 +40,4 @@ class QuestionAnswerDatasetCreator:
 
 if __name__ == '__main__':
 
-    QuestionAnswerDatasetCreator.create_vqa_from_dataset('datasets/augmented/full_dataset.json', 'eval_vqa/')
-    print("Done")
+    QuestionAnswerDatasetCreator.create_vqa_from_dataset('/home/devonperoutky/LLaVA/dataset/augmented/test_dataset.json', '/home/devonperoutky/LLaVA/eval_vqa/')

@@ -1,11 +1,9 @@
 from dataclasses import dataclass
 from pathlib import Path
-from typing import List
+from typing import List, Optional
 
-import os
 import PIL
 import praw
-import itertools
 from PIL import Image
 import re
 
@@ -14,6 +12,7 @@ import shutil
 import os
 import json
 
+from src.utils import flat_map
 
 '''
 --------------------------------------------------
@@ -38,6 +37,12 @@ class RedditPostCaption:
     image_height: int
     image_download_path: str
     image_url: str
+
+    def __eq__(self, other):
+        return isinstance(other, RedditPostCaption) and self.submission_id == other.submission_id and self.comment_id == other.comment_id and self.image_url == other.image_url
+
+    def __hash__(self):
+        return hash((self.submission_id, self.comment_id, self.image_url))
 
     def to_json(self, prompt_type="basic"):
         return {
@@ -83,7 +88,11 @@ class SubRedditCrawler:
             if reply.id not in self.seen_ids:
                 self._print_comment_tree(reply, indent + 1)
 
-    def _ingest_subreddit(self, subreddit_name, output_path, num_submissions=None, comments_per_submission=10) -> List[RedditPostCaption]:
+    def _ingest_subreddit(self, subreddit_name, output_path, num_submissions=None, comments_per_submission=10, time_filter='all') -> List[RedditPostCaption]:
+        assert time_filter in ["all", "day", "hour", "month", "week", "year"], f'Invalid time filter: {time_filter}'
+
+        print(f'\n\n-------- Ingesting top {num_submissions} submissions from {subreddit_name} for {time_filter}')
+
         image_dir = output_path + '/images'
         existing_data = []
         image_captions = []
@@ -99,7 +108,7 @@ class SubRedditCrawler:
         existing_images = os.listdir(image_dir)
         print(f'Loaded {len(existing_images)} existing downloaded images from {image_dir}')
 
-        submission_generator = self.reddit_client.subreddit(subreddit_name).top(limit=num_submissions)
+        submission_generator = self.reddit_client.subreddit(subreddit_name).top(limit=num_submissions, time_filter=time_filter)
         submissions = [sub for sub in submission_generator]
         print(f'Received {len(submissions)} submissions from subreddit {subreddit_name}')
 
@@ -114,7 +123,7 @@ class SubRedditCrawler:
 
             # TODO: if submission.id alread in JSON, skip it.
             image_exists = lambda image_path: Path(image_path).exists()
-            existing_submission = any([sub.get('id') == submission.id for sub in existing_data])
+            existing_submission = any([sub.get('submission_id') == submission.id for sub in existing_data])
             image_paths = [f'{image_dir}/{submission.id}_{key}.jpg' for key in submission.media_metadata.keys()] if hasattr(submission, 'media_metadata') else [f'{image_dir}/{submission.id}.jpg']
             print(f'Expected Images:  {image_paths}')
             all_images_downloaded = all([image_exists(image_path) for image_path in image_paths])
@@ -218,9 +227,10 @@ class SubRedditCrawler:
                         )
                     )
 
+        print(f'Ingested {len(image_captions)} image-caption pairs from subreddit {subreddit_name}')
         return image_captions
 
-    def ingest_subreddit_as_conversation_json(self, subreddit_name, output_path, num_submissions=None, comments_per_submission=10):
+    def ingest_subreddit_as_conversation_json(self, subreddit_name: str, output_path: str, num_submissions: Optional[int] = None, comments_per_submission: int = 10):
         dataset_types = ["basic", "augmented"]
 
         # Ensure the output directories exists
@@ -232,33 +242,50 @@ class SubRedditCrawler:
             if not os.path.exists(full_path):
                 os.makedirs(full_path)
 
-        # Set up the image directory
-        image_dir = output_path + '/images'
-        if not os.path.exists(image_dir):
-            os.makedirs(image_dir)
-
-        reddit_post_captions = self._ingest_subreddit(subreddit_name, output_path, num_submissions, comments_per_submission)
-        print(f'Ingested {len(reddit_post_captions)} image-caption pairs from subreddit {subreddit_name}')
-
-        # Split image_captions into train, test, and validation sets
-        train_percentage, test_percentage, validation_percentage = .8, .1, .1
-        assert train_percentage + test_percentage + validation_percentage == 1
-
-        train_size = int(train_percentage * len(reddit_post_captions))
-        test_size = int(test_percentage * len(reddit_post_captions))
-
-        train_split = reddit_post_captions[0:train_size]
-        test_split = reddit_post_captions[train_size:train_size + test_size]
-        validation_split = reddit_post_captions[train_size+test_size:]
-
-        # Ensure the output directories exists
+        # Ensure the output files exists
         augmented_output_path = os.path.join(output_path, 'augmented', 'full_dataset.json')
         basic_output_path = os.path.join(output_path, 'basic', 'full_dataset.json')
         os.makedirs(os.path.dirname(augmented_output_path), exist_ok=True)
         os.makedirs(os.path.dirname(basic_output_path), exist_ok=True)
 
+        # Set up the image directory
+        image_dir = output_path + '/images'
+        if not os.path.exists(image_dir):
+            os.makedirs(image_dir)
+
+        ingest_subreddit = lambda time_filter: self._ingest_subreddit(subreddit_name, output_path, num_submissions, comments_per_submission, time_filter)
+        reddit_post_captions = flat_map(ingest_subreddit, ["all", "day", "hour", "month", "week", "year"])
+        print(f'Ingested {len(reddit_post_captions)} image-caption pairs in total from subreddit {subreddit_name}')
+
+        # deduplicate in case we pull multiple of the same submission based on submission_id+comment_id
+        reddit_post_captions = list(set(reddit_post_captions))
+        print(f'{len(reddit_post_captions)} total new image-caption pairs after de-duplicating')
+
         for prompt_type in dataset_types:
-            SubRedditCrawler.save_captions_to_dataset(os.path.join(output_path, prompt_type, 'full_dataset.json'), reddit_post_captions, prompt_type)
+            full_dataset_path = os.path.join(output_path, prompt_type, 'full_dataset.json')
+
+            # Load the existing data
+            if os.path.exists(full_dataset_path):
+                with open(full_dataset_path, 'r') as json_file:
+                    existing_data = json.load(json_file)
+                print(f'Loaded {len(existing_data)} existing image-caption pairs from {full_dataset_path}')
+
+            # Add the new data to the existing data
+            print(f'Adding {len(reddit_post_captions)} new image-caption pairs to the existing {len(existing_data)} pairs')
+            full_ds = existing_data + [p.to_json(prompt_type=prompt_type) for p in reddit_post_captions]
+
+            # Split image_captions into train, test, and validation sets
+            train_percentage, test_percentage, validation_percentage = .8, .1, .1
+            assert train_percentage + test_percentage + validation_percentage == 1
+
+            train_size = int(train_percentage * len(full_ds))
+            test_size = int(test_percentage * len(full_ds))
+
+            train_split = full_ds[0:train_size]
+            test_split = full_ds[train_size:train_size + test_size]
+            validation_split = full_ds[train_size + test_size:]
+
+            SubRedditCrawler.save_captions_to_dataset(os.path.join(output_path, prompt_type, 'full_dataset.json'), full_ds, prompt_type)
             SubRedditCrawler.save_captions_to_dataset(os.path.join(output_path, prompt_type, 'train_dataset.json'), train_split, prompt_type)
             SubRedditCrawler.save_captions_to_dataset(os.path.join(output_path, prompt_type, 'test_dataset.json'), test_split, prompt_type)
             SubRedditCrawler.save_captions_to_dataset(os.path.join(output_path, prompt_type, 'validation_dataset.json'), validation_split, prompt_type)
@@ -266,25 +293,14 @@ class SubRedditCrawler:
     @staticmethod
     def save_captions_to_dataset(dataset_path, dataset, prompt_type):
         print(f'Saving {len(dataset)} captions for prompt type {prompt_type} to {dataset_path}')
-        existing_data = []
-
-        # Load the existing data
-        if os.path.exists(dataset_path):
-            with open(dataset_path, 'r') as json_file:
-                existing_data = json.load(json_file)
-            print(f'Loaded {len(existing_data)} existing image-caption pairs from {dataset_path}')
-
-        # Add the new data to the existing data
-        print(f'Adding {len(dataset)} new image-caption pairs to the existing {len(existing_data)} pairs')
-        full_ds = existing_data + [p.to_json(prompt_type=prompt_type) for p in dataset]
 
         # Save the new data to the dataset
         with open(dataset_path, 'w') as json_file:
-            json.dump(full_ds, json_file, indent=4)
-            print(f'Saved {len(full_ds)} image-caption pairs to {dataset_path}')
+            json.dump(dataset, json_file, indent=4)
+            print(f'Saved {len(dataset)} image-caption pairs to {dataset_path}')
 
     @staticmethod
-    def download_image( image_url, download_path):
+    def download_image(image_url, download_path):
         print("Downloading image from " + image_url)
         response = requests.get(image_url, stream=True)
         with open(download_path, 'wb') as out_file:
