@@ -1,3 +1,4 @@
+import time
 from pathlib import Path
 from typing import List, Optional, TypeVar, Generic, Dict
 
@@ -10,6 +11,8 @@ import requests
 import shutil
 import os
 import json
+
+from prawcore import TooManyRequests
 
 from src.utils import flat_map
 from models import RedditPostCaption, CrawlerDataParams
@@ -145,6 +148,7 @@ class SubRedditCrawler:
                         RedditPostCaption(
                             submission_id=submission.id,
                             comment_id=top_level_comment.id,
+                            self_text=submission.selftext,
                             title=submission.title,
                             comment=top_level_comment.body,
                         )
@@ -207,7 +211,7 @@ class SubRedditCrawler:
         return images
 
     def ingest_subreddit_as_conversation_json(self, subreddit_name: str, output_path: str, num_submissions: Optional[int] = None, comments_per_submission: int = 10):
-        dataset_types = ["basic", "augmented"]
+        dataset_types = ["augmented"]
 
         # Ensure the output directories exists
         if not os.path.exists(output_path):
@@ -220,20 +224,24 @@ class SubRedditCrawler:
 
         # Ensure the output files exists
         augmented_output_path = os.path.join(output_path, 'augmented', 'full_dataset.json')
-        basic_output_path = os.path.join(output_path, 'basic', 'full_dataset.json')
+        # basic_output_path = os.path.join(output_path, 'full_dataset.json')
         os.makedirs(os.path.dirname(augmented_output_path), exist_ok=True)
-        os.makedirs(os.path.dirname(basic_output_path), exist_ok=True)
+        # os.makedirs(os.path.dirname(basic_output_path), exist_ok=True)
 
         # Set up the image directory
         image_dir = output_path + '/images'
         if not os.path.exists(image_dir):
             os.makedirs(image_dir)
 
-        reddit_post_captions = flat_map(
-            lambda time_filter: self._ingest_subreddit(subreddit_name, output_path, num_submissions, comments_per_submission, time_filter),
-            ["all", "day", "hour", "month", "week", "year"]
-        )
-        print(f'Working with {len(reddit_post_captions)} old+new image-caption pairs in total from subreddit {subreddit_name}')
+        reddit_post_captions = []
+        for time_filter in ["all", "day", "hour", "month", "week", "year"]:
+            try:
+                new_posts = self._ingest_subreddit(subreddit_name, output_path, num_submissions, comments_per_submission, time_filter)
+                print(f'Have {len(reddit_post_captions)} old+new image-caption pairs in total from subreddit {subreddit_name} for {time_filter} time')
+                reddit_post_captions += new_posts
+            except TooManyRequests:
+                print('Too many requests. Received a 429. Sleeping for 60 seconds and then continuing')
+                time.sleep(60)
 
         entries = [self.crawler_data_params.transform_post(post) for post in set(reddit_post_captions)]
         print(f'{len(entries)} total entries after de-duplicating')

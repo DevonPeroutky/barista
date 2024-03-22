@@ -115,12 +115,40 @@ class TextOnlyCrawlerParams(CrawlerDataParams):
         self.ingest_images = False
 
     @staticmethod
+    def filter_post(submission: Submission) -> bool:
+        # Filter for question-answer pairs in r/UnethicalLifeProTips
+        if "ulpt request" in submission.title.lower():
+            print("YES")
+            return True
+        else:
+            print("NOTHING")
+            return False
+
+    @staticmethod
+    def strip_prefix(title: str):
+        title = title.strip()
+        title = title.lstrip("ULPT")
+        title = title.lstrip("ulpt")
+        title = title.lstrip("Ulpt")
+        title = title.strip()
+        title = title.lstrip("Request")
+        title = title.lstrip("REQUEST")
+        title = title.lstrip("request")
+        title = title.strip()
+        title = title.lstrip(":")
+        title = title.strip()
+        title = title.lstrip("-")
+        title = title.strip()
+        return title
+
+    @staticmethod
     def transform_post(post: RedditPostCaption) -> QuestionAnswerEntry:
+        cleaned_title = TextOnlyCrawlerParams.strip_prefix(title=post.title)
         return QuestionAnswerEntry(
             id=f"{post.submission_id}_{post.comment_id}",
             title=post.title,
             self_text=post.self_text,
-            human_prompt=f'{post.title} {post.self_text}' if post.self_text else post.title,
+            human_prompt=f'{cleaned_title} {post.self_text}' if post.self_text else cleaned_title,
             ai_response=post.comment,
             submission_id=post.submission_id,
             comment_id=post.comment_id,
